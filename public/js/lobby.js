@@ -1,38 +1,113 @@
-// public/js/lobby.js
-// Defina a URL do backend (Render Web Service)
-const BACKEND_URL = 'https://poker-online-free.onrender.com';
+const express = require('express');
+const http = require('http');
+const path = require('path');
+const cors = require('cors');
+const socketIO = require('socket.io');
+const { createDeck, shuffleDeck, evaluateHand } = require('./gameLogic');
 
-// Recupera parâmetros da URL para prefixar nick e chips em navegação
-const urlParams = new URLSearchParams(window.location.search);
-const nick = urlParams.get('nick') || '';
-const chips = urlParams.get('chips') || '';
+// Configura servidor Express + WebSocket
+const app = express();
+const server = http.createServer(app);
+const io = socketIO(server);
 
-// Função para renderizar as mesas na tela
-function renderTables(tables) {
-  const container = document.getElementById('tablesContainer');
-  container.innerHTML = '';// limpa conteúdo anterior
+// Habilita CORS para todas origens (ajuste em produção)
+app.use(cors());
 
-  tables.forEach(table => {
-    const div = document.createElement('div');
-    div.className = 'table';
-    div.innerHTML = `
-      <h3>${table.name}</h3>
-      <p>Jogadores: ${table.players.join(', ') || 'Nenhum'}</p>
-      <p>Vagas disponíveis: ${table.availableSpots}</p>
-    `;
-    div.addEventListener('click', () => {
-      // Redireciona ao game.html apontando para o backend
-      window.location.href = `${BACKEND_URL}/game.html?roomId=${table.id}&nick=${encodeURIComponent(nick)}&chips=${chips}`;
-    });
-    container.appendChild(div);
-  });
+// Serve arquivos estáticos (HTML, CSS, JS, imagens)
+app.use(express.static(path.join(__dirname, '../public')));
+
+// Parse JSON no body
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Cria 10 mesas pré-definidas
+const rooms = {};
+for (let i = 1; i <= 10; i++) {
+  const roomId = `Mesa${i}`;
+  rooms[roomId] = {
+    name: `Mesa ${i}`,
+    players: [],
+    spectators: [],
+    gameState: null,
+    startingIndex: 0
+  };
 }
 
-// Fetch absoluto para garantir chamada ao Web Service
-fetch(`${BACKEND_URL}/api/roomsWithPlayers`)
-  .then(response => {
-    if (!response.ok) throw new Error('Erro na resposta do servidor');
-    return response.json();
-  })
-  .then(data => renderTables(data))
-  .catch(err => console.error('Erro ao carregar mesas:', err));
+// Rotas de API
+app.get('/api/roomsWithPlayers', (req, res) => {
+  const data = Object.keys(rooms).map(roomId => ({
+    id: roomId,
+    name: rooms[roomId].name,
+    players: rooms[roomId].players.map(p => p.nick),
+    availableSpots: 8 - rooms[roomId].players.length
+  }));
+  res.json(data);
+});
+
+app.get('/api/gameState', (req, res) => {
+  const { roomId } = req.query;
+  const room = rooms[roomId];
+  if (!room) return res.status(404).json({ message: 'Mesa não encontrada.' });
+  if (!room.gameState) {
+    return res.json({
+      stage: 'WAITING',
+      communityCards: [],
+      pot: 0,
+      currentPlayerIndex: 0,
+      players: room.players.map(p => ({
+        id: p.id, nick: p.nick, chips: p.chips,
+        folded: false, allIn: false, betAmount: 0, lastAction: '', cards: []
+      }))
+    });
+  }
+  res.json(getPublicGameState(room.gameState));
+});
+
+// Socket.IO
+io.on('connection', socket => {
+  console.log('Usuário conectado:', socket.id);
+
+  socket.on('joinRoom', data => {
+    const { roomId, nick, chips } = data;
+    const room = rooms[roomId];
+    if (!room) return socket.emit('errorMessage', { message: 'Mesa não existe.' });
+    const initialChips = parseInt(chips, 10) || 1000;
+    if (initialChips <= 0) return socket.emit('errorMessage', { message: 'Fichas insuficientes.' });
+
+    // Reconexão: remove instâncias anteriores
+    room.players = room.players.filter(p => p.id !== socket.id);
+    room.spectators = room.spectators.filter(s => s.id !== socket.id);
+    socket.leave(roomId);
+
+    // Se jogo em andamento, entra como espectador
+    if (room.gameState && room.gameState.stage !== 'WAITING') {
+      room.spectators.push({ id: socket.id, nick, chips: initialChips });
+      socket.emit('infoMessage', { message: 'Você está como espectador.' });
+      socket.join(roomId);
+      return;
+    }
+
+    if (room.players.length >= 8) return socket.emit('errorMessage', { message: 'Mesa cheia.' });
+
+    room.players.push({ id: socket.id, nick, chips: initialChips });
+    socket.join(roomId);
+    io.to(roomId).emit('playersUpdate', { players: room.players });
+  });
+
+  socket.on('startGame', roomId => {
+    const room = rooms[roomId];
+    if (!room) return;
+    if (room.players.length < 2) {
+      return io.to(roomId).emit('notEnoughPlayers', { message: 'Precisa de 2+ jogadores.' });
+    }
+    startGame(roomId);
+  });
+
+  // ... restante das ações do jogador (playerAction, endRound, disconnect) ...
+});
+
+// Inicia o servidor
+const PORT = process.env.PORT || 10000;
+server.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
+// (Implementar funções auxiliares: startGame, playerAction, nextStage, determineWinner, getPublicGameState)
