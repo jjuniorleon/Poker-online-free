@@ -1,5 +1,4 @@
 // public/js/lobby.js
-
 // Usa o host atual como backend
 const BACKEND_URL = window.location.origin;
 
@@ -23,8 +22,7 @@ function renderTables(tables) {
     `;
 
     div.addEventListener('click', () => {
-      // Redireciona para a página de jogo relativa ao host atual
-      window.location.href = 
+      window.location.href =
         `game.html?roomId=${table.id}` +
         `&nick=${encodeURIComponent(nick)}` +
         `&chips=${encodeURIComponent(chips)}`;
@@ -35,7 +33,7 @@ function renderTables(tables) {
 }
 
 // Carrega as mesas via fetch relativo
-fetch(`/api/roomsWithPlayers`)
+fetch(`${BACKEND_URL}/api/roomsWithPlayers`)
   .then(response => {
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
     return response.json();
