@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <title>Poker Online - Login</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <h1>Poker Online</h1>
+  <form id="loginForm">
+    <label>Nome: <input type="text" id="nick" required></label><br>
+    <label>Fichas Iniciais: <input type="number" id="chips" required></label><br>
+    <button type="submit">Entrar</button>
+  </form>
+  <script>
+    document.getElementById('loginForm').addEventListener('submit', function(e) {
+      e.preventDefault();
+      const nick = document.getElementById('nick').value;
+      const chips = document.getElementById('chips').value;
+      window.location.href = `lobby.html?nick=${encodeURIComponent(nick)}&chips=${chips}`;
+    });
+  </script>
+</body>
+</html>

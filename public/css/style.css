@@ -1,0 +1,31 @@
+body {
+    font-family: Arial, sans-serif;
+    margin: 20px;
+    background-color: #f0f0f0;
+  }
+  
+  h1 {
+    color: #333;
+  }
+  
+  .table, .player, .playerInfo {
+    border: 1px solid #ccc;
+    padding: 10px;
+    margin: 10px;
+    background: #fff;
+    border-radius: 4px;
+  }
+  
+  .highlight {
+    border: 2px solid #007bff;
+  }
+  
+  .card-img {
+    width: 50px;
+    margin-right: 5px;
+  }
+  
+  .cardsContainer {
+    margin-top: 5px;
+  }
+  
